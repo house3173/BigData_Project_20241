@@ -6,7 +6,7 @@ Nhóm 18
 
 Học kỳ 2024.1
 
-Giáo viên hướng dẫn: TS. Trần Việt Trung
+Giảng viên hướng dẫn: TS. Trần Việt Trung
 
 #### Danh sách các thành viên:
 | STT | Họ và tên         | MSSV     | Email                                | Công việc   |
