@@ -1,5 +1,6 @@
 package com.bigdata.it4931.utility.kafka;
 
+import lombok.experimental.UtilityClass;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -10,6 +11,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Properties;
 
+@UtilityClass
 public class KafkaUtils {
     public static <K, V> Consumer<K, V> initConsumer(Properties props, String... topicNames) {
         Consumer<K, V> consumer = new KafkaConsumer<>(props);
