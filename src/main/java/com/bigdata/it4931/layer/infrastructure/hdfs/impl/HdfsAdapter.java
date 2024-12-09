@@ -9,6 +9,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import java.io.InputStream;
+
 @Slf4j
 @Component
 public class HdfsAdapter implements IHdfsAdapter {
@@ -16,14 +18,14 @@ public class HdfsAdapter implements IHdfsAdapter {
     private final String defaultFS;
 
     public HdfsAdapter(@Qualifier("hdfsProperties") HdfsProperties hdfsProperties,
-                       @Qualifier("hdfsSiteConfiguration") Configuration hdfsSiteConfiguration,
-                       @Qualifier("coreSiteConfiguration") Configuration coreSiteConfiguration) {
+                       @Qualifier("hdfsSiteInputStream") InputStream hdfsSiteInputStream,
+                       @Qualifier("coreSiteInputStream") InputStream coreSiteInputStream) {
         if (!StringUtils.isNullOrEmpty(hdfsProperties.getUser())) {
             System.setProperty("HADOOP_USER_NAME", hdfsProperties.getUser());
         }
         this.configuration = new Configuration();
-        this.configuration.addResource(hdfsSiteConfiguration);
-        this.configuration.addResource(coreSiteConfiguration);
+        this.configuration.addResource(hdfsSiteInputStream);
+        this.configuration.addResource(coreSiteInputStream);
         this.defaultFS = this.configuration.get("fs.defaultFS");
     }
 
