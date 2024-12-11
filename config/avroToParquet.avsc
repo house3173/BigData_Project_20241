@@ -1,0 +1,46 @@
+{
+  "type": "record",
+  "name": "JobData",
+  "namespace": "com.example",
+  "fields": [
+    {"name": "jobId", "type": "string"},
+    {"name": "experience", "type": ["string", "null"]},
+    {"name": "qualifications", "type": ["string", "null"]},
+    {"name": "salaryRange", "type": ["string", "null"]},
+    {"name": "location", "type": ["string", "null"]},
+    {"name": "country", "type": ["string", "null"]},
+    {"name": "latitude", "type": ["string", "null"]},
+    {"name": "longitude", "type": ["string", "null"]},
+    {"name": "workType", "type": ["string", "null"]},
+    {"name": "companySize", "type": ["string", "null"]},
+    {"name": "jobPostingDate", "type": "string"},
+    {"name": "preference", "type": ["string", "null"]},
+    {"name": "contactPerson", "type": ["string", "null"]},
+    {"name": "contact", "type": ["string", "null"]},
+    {"name": "jobTitle", "type": ["string", "null"]},
+    {"name": "role", "type": ["string", "null"]},
+    {"name": "jobPortal", "type": ["string", "null"]},
+    {"name": "jobDescription", "type": ["string", "null"]},
+    {"name": "benefits", "type": ["string", "null"]},
+    {"name": "skills", "type": ["string", "null"]},
+    {"name": "responsibilities", "type": ["string", "null"]},
+    {"name": "companyName", "type": ["string", "null"]},
+    {
+      "name": "companyProfile",
+      "type": {
+        "type": "record",
+        "name": "CompanyProfile",
+        "fields": [
+          {"name": "sector", "type": ["string", "null"]},
+          {"name": "industry", "type": ["string", "null"]},
+          {"name": "city", "type": ["string", "null"]},
+          {"name": "state", "type": ["string", "null"]},
+          {"name": "zip", "type": ["string", "null"]},
+          {"name": "website", "type": ["string", "null"]},
+          {"name": "ticker", "type": ["string", "null"]},
+          {"name": "ceo", "type": ["string", "null"]}
+        ]
+      }
+    }
+  ]
+}

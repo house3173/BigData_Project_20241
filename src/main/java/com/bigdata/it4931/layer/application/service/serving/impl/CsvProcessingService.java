@@ -82,13 +82,10 @@ public class CsvProcessingService implements ICsvProcessingService {
                 jobDataDto.setCompanyProfile(companyProfileDto);
 
                 kafkaBrokerWriter.write(Constants.OBJECT_MAPPER.writeValueAsString(jobDataDto));
-                Thread.sleep(200);
             }
 
             inputStream.close();
         } catch (IOException | CsvValidationException e) {
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
 
