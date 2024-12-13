@@ -23,9 +23,15 @@ public class KafkaConfiguration {
         return new KafkaConsumerProperties();
     }
 
-    @Bean("kafkaBrokerReaderProperties")
-    public Properties kafkaBrokerReaderProperties(@Qualifier("kafkaConsumerProperties") KafkaConsumerProperties kafkaConsumerProperties,
-                                                  @Value("${kafka.consumer.group-id}") String groupId) {
+    @Bean("kafkaBrokerBatchReaderProperties")
+    public Properties kafkaBrokerBatchReaderProperties(@Qualifier("kafkaConsumerProperties") KafkaConsumerProperties kafkaConsumerProperties,
+                                                  @Value("${kafka.consumer.batch-group-id}") String groupId) {
+        return getProperties(kafkaConsumerProperties, groupId);
+    }
+
+    @Bean("kafkaBrokerSpeedReaderProperties")
+    public Properties kafkaBrokerSpeedReaderProperties(@Qualifier("kafkaConsumerProperties") KafkaConsumerProperties kafkaConsumerProperties,
+                                                  @Value("${kafka.consumer.speed-group-id}") String groupId) {
         return getProperties(kafkaConsumerProperties, groupId);
     }
 

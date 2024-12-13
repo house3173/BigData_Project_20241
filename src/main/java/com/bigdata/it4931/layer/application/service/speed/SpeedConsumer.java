@@ -14,7 +14,7 @@ import java.util.Properties;
 @Service
 @Slf4j
 public class SpeedConsumer extends KafkaBrokerReader {
-    public SpeedConsumer(@Qualifier("kafkaBrokerReaderProperties") Properties props,
+    public SpeedConsumer(@Qualifier("kafkaBrokerSpeedReaderProperties") Properties props,
                          @Value("${kafka.consumer.topic}") String topic) {
         super(props, Collections.singletonList(topic), 2, 10, 5);
     }

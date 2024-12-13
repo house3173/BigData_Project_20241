@@ -18,7 +18,7 @@ public class TestProducer {
         this.kafkaBrokerWriter = new KafkaBrokerWriter(properties, Collections.singletonList(topic));
     }
 
-    @Scheduled(fixedRate = 2000)
+//    @Scheduled(fixedRate = 2000)
     public void send() {
         kafkaBrokerWriter.write(System.currentTimeMillis() + "");
     }

@@ -6,6 +6,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,9 +23,13 @@ public class KafkaBrokerWriter extends KafkaBroker {
     }
 
     public List<Future<RecordMetadata>> write(String message) {
+        return write(message, StandardCharsets.UTF_8);
+    }
+
+    public List<Future<RecordMetadata>> write(String message, Charset charset) {
         List<Future<RecordMetadata>> futures = new ArrayList<>();
         for (String topic : topics) {
-            futures.add(producer.send(new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8))));
+            futures.add(producer.send(new ProducerRecord<>(topic, message.getBytes(charset))));
         }
         return futures;
     }
