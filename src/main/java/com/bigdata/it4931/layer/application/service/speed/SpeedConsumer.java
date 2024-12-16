@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -16,7 +17,7 @@ import java.util.Properties;
 public class SpeedConsumer extends KafkaBrokerReader {
     public SpeedConsumer(@Qualifier("kafkaBrokerSpeedReaderProperties") Properties props,
                          @Value("${kafka.consumer.topic}") String topic) {
-        super(props, Collections.singletonList(topic), 2, 10, 5);
+        super(props, Collections.singletonList(topic), 1, 10, 5);
     }
 
     @Override

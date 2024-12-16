@@ -2,6 +2,7 @@ package com.bigdata.it4931.layer.application.service.batch;
 
 import com.bigdata.it4931.config.Constants;
 import com.bigdata.it4931.layer.application.domain.dto.JobDataDto;
+import com.bigdata.it4931.layer.application.service.serving.ConsumeRunner;
 import com.bigdata.it4931.layer.infrastructure.kafka.message.KafkaMessage;
 import com.bigdata.it4931.layer.infrastructure.kafka.read.KafkaBrokerReader;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,13 +19,13 @@ import java.util.Properties;
 
 @Service
 @Slf4j
-public class BatchConsumer extends KafkaBrokerReader {
+public class BatchConsumer extends KafkaBrokerReader implements ConsumeRunner {
     private final HdfsParquetService hdfsParquetService;
 
     public BatchConsumer(@Qualifier("kafkaBrokerBatchReaderProperties") Properties props,
                          @Value("${kafka.consumer.topic}") String topic,
                          HdfsParquetService hdfsParquetService) {
-        super(props, Collections.singletonList(topic), 2, 10, 5);
+        super(props, Collections.singletonList(topic), 1, 10, 5);
         this.hdfsParquetService = hdfsParquetService;
     }
 
@@ -40,5 +41,11 @@ public class BatchConsumer extends KafkaBrokerReader {
             }
         }
         hdfsParquetService.save(jobDataList);
+    }
+
+    @Override
+    public void start(){
+        log.info("Starting batch-layer consumer");
+        super.start();
     }
 }

@@ -1,6 +1,6 @@
 package com.bigdata.it4931.layer.application.service.serving;
 
-public interface IKafkaConsumerThread extends Runnable {
+public interface ConsumeRunner {
     void start();
 
     void stop();

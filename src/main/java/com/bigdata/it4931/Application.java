@@ -1,7 +1,8 @@
 package com.bigdata.it4931;
 
-import com.bigdata.it4931.layer.application.service.serving.IKafkaConsumerThread;
-import org.springframework.beans.factory.annotation.Qualifier;
+import com.bigdata.it4931.layer.application.service.serving.ConsumeRunner;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -9,20 +10,16 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
+@Slf4j
 public class Application implements CommandLineRunner {
-    private final ExecutorService taskExecutor;
-    private final List<IKafkaConsumerThread> kafkaConsumerThreads;
+    private final List<ConsumeRunner> kafkaConsumerThreads;
 
-    public Application(List<IKafkaConsumerThread> kafkaConsumerThreads,
-                       @Qualifier("cacheExecutorService") ExecutorService taskExecutor) {
+    public Application(List<ConsumeRunner> kafkaConsumerThreads) {
         this.kafkaConsumerThreads = kafkaConsumerThreads;
-        this.taskExecutor = taskExecutor;
     }
 
     public static void main(String[] args) {
@@ -31,8 +28,12 @@ public class Application implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        for (IKafkaConsumerThread kafkaConsumerThread : kafkaConsumerThreads) {
-            taskExecutor.submit(kafkaConsumerThread);
-        }
+        log.info("Starting consumers...");
+        kafkaConsumerThreads.forEach(ConsumeRunner::start);
+    }
+
+    @PreDestroy
+    protected void stopService() {
+        kafkaConsumerThreads.forEach(ConsumeRunner::stop);
     }
 }

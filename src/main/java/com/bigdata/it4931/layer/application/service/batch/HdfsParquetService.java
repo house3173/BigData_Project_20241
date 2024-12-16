@@ -1,11 +1,13 @@
 package com.bigdata.it4931.layer.application.service.batch;
 
+import com.bigdata.it4931.config.hdfs.HdfsConfiguration;
 import com.bigdata.it4931.layer.application.domain.dto.CompanyProfileDto;
 import com.bigdata.it4931.layer.application.domain.dto.JobDataDto;
 import com.bigdata.it4931.layer.infrastructure.hdfs.IHdfsAdapter;
 import com.bigdata.it4931.utility.StringUtils;
 import com.bigdata.it4931.utility.concurrent.AsyncCallback;
 import com.bigdata.it4931.utility.concurrent.BatchProcessor;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -17,15 +19,18 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.HadoopOutputFile;
 import org.apache.parquet.io.OutputFile;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -35,6 +40,8 @@ public class HdfsParquetService {
     private static final String SCHEMA_LOCATION = "config/avroToParquet.avsc";
     private final BatchProcessor<JobDataDto, Object> queue;
     private final ExecutorService taskExecutor;
+    private final SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+    private final HdfsConfiguration hdfsConfiguration;
 
     static {
         try (InputStream inputStream = new FileInputStream(SCHEMA_LOCATION)) {
@@ -46,17 +53,18 @@ public class HdfsParquetService {
     }
 
     private final IHdfsAdapter hdfsAdapter;
-    private final String datetimePattern = "yyyy-MM-dd-HHmmss";
     private volatile ParquetWriter<GenericData.Record> writer;
-    private final double fileSizeThreshold;
+    private final long fileSizeThreshold;
     private Path path;
     private volatile AtomicBoolean stopped = new AtomicBoolean(false);
 
     public HdfsParquetService(IHdfsAdapter hdfsAdapter,
-                              @Qualifier("cacheExecutorService") ExecutorService taskExecutor) {
+                              HdfsConfiguration hdfsConfiguration) {
         this.hdfsAdapter = hdfsAdapter;
-        this.fileSizeThreshold = 5 * 1024 * 1024L;
-        this.taskExecutor = taskExecutor;
+        this.fileSizeThreshold = hdfsConfiguration.getHdfsFileMaxSize() * 1024 * 1024L - 502400;
+
+        this.taskExecutor = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("cache-thread-pool-%d").build());
+        this.hdfsConfiguration = hdfsConfiguration;
 
         queue = BatchProcessor.<JobDataDto, Object>newBuilder()
                 .with(builder -> {
@@ -65,10 +73,12 @@ public class HdfsParquetService {
                     builder.corePoolSize = 1;
                 })
                 .build(entries -> {
-                    log.info("Processing batch of {} records", entries.size());
-
                     if (!stopped.get()){
-                        checkFileSize();
+                        try {
+                            checkFileSize();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
 
                     List<JobDataDto> jobDataList = new ArrayList<>();
@@ -76,9 +86,11 @@ public class HdfsParquetService {
                         jobDataList.add(entry.getKey());
                     }
                     List<GenericData.Record> data = convertToParquetRecord(jobDataList);
-
-                    log.info("Writing {} records to parquet", data.size());
-                    writeToParquet(data);
+                    try {
+                        writeToParquet(data);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 });
 
 
@@ -98,140 +110,148 @@ public class HdfsParquetService {
         }
     }
 
-    private synchronized void checkFileSize(){
-        if (this.writer == null){
-            log.info("Initializing parquet writer");
-            initWriter();
-            return;
-        }
-        if(this.writer.getDataSize() > fileSizeThreshold){
-            log.info("File size threshold reached, closing current file");
-            writeToNextFile();
+    private void checkFileSize() throws IOException {
+        synchronized (this) {
+            if (writer == null) {
+                initWriter();
+                return;
+            }
+            long dataSize = this.writer.getDataSize();
+            if (dataSize > fileSizeThreshold) {
+                try {
+                    writeToNextFile();
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
+                }
+            }
         }
     }
 
-    private void close(ParquetWriter<GenericData.Record> oldWriter, Path path) {
-        boolean hasEmptyFile = false;
+    private void close(ParquetWriter<GenericData.Record> writerClose, Path path) {
+        boolean isSave = true;
         try {
-            if (oldWriter != null) {
-                hasEmptyFile = oldWriter.getDataSize() == 0;
-                oldWriter.close();
-
-                FileSystem fs = hdfsAdapter.getFileSystem();
-                if (fs.exists(path)){
-                    Path completedPath = completeFile(path);
-                    fs.rename(path, completedPath);
-                }
+            if (writerClose != null) {
+                isSave = writerClose.getDataSize() > 1024 || (writerClose.getDataSize() > 0);
+                writerClose.close();
             }
-        } catch (IOException e) {
-            log.error("Failed to close parquet writer", e);
-            hasEmptyFile = true;
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            isSave = false;
         } finally {
             try {
-                if (hasEmptyFile) {
-                    FileSystem fs = hdfsAdapter.getFileSystem();
-                    if (fs.exists(path)) {
-                        log.info("Deleting empty file {}", path);
-                        fs.delete(path, true);
-                    }
+                FileSystem fileSystem = FileSystem.get(hdfsAdapter.getConfiguration());
+                if (!isSave && fileSystem.exists(path)) {
+                    log.info("onDestroy: delete file empty : " + path);
+                    fileSystem.delete(path, true);
                 }
-            } catch (IOException e) {
-                log.error("Failed to delete empty file", e);
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
             }
+        }
+    }
+
+    @Scheduled(cron = "0 0 1 * * *", zone = "Asia/Ho_Chi_Minh")
+    public void eventFinalTempFile() {
+        try {
+            if (this.writer.getDataSize() > 0) {
+                writeToNextFile();
+            }
+        } catch (IOException e) {
+            log.error(e.getMessage(), e);
         }
     }
 
     private List<GenericData.Record> convertToParquetRecord(List<JobDataDto> jobDataList) {
         List<GenericData.Record> records = new ArrayList<>();
         jobDataList.forEach(jobData -> {
-            GenericData.Record record = new GenericData.Record(SCHEMA);
+            GenericData.Record jobDataRecord = new GenericData.Record(SCHEMA);
 
             if (!StringUtils.isNullOrEmpty(jobData.getJobId())) {
-                record.put("jobId", jobData.getJobId());
+                jobDataRecord.put("jobId", jobData.getJobId());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getExperience())) {
-                record.put("experience", jobData.getExperience());
+                jobDataRecord.put("experience", jobData.getExperience());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getQualifications())) {
-                record.put("qualifications", jobData.getQualifications());
+                jobDataRecord.put("qualifications", jobData.getQualifications());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getSalaryRange())) {
-                record.put("salaryRange", jobData.getSalaryRange());
+                jobDataRecord.put("salaryRange", jobData.getSalaryRange());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getLocation())) {
-                record.put("location", jobData.getLocation());
+                jobDataRecord.put("location", jobData.getLocation());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getCountry())) {
-                record.put("country", jobData.getCountry());
+                jobDataRecord.put("country", jobData.getCountry());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getLatitude())) {
-                record.put("latitude", jobData.getLatitude());
+                jobDataRecord.put("latitude", jobData.getLatitude());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getLongitude())) {
-                record.put("longitude", jobData.getLongitude());
+                jobDataRecord.put("longitude", jobData.getLongitude());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getWorkType())) {
-                record.put("workType", jobData.getWorkType());
+                jobDataRecord.put("workType", jobData.getWorkType());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getCompanySize())) {
-                record.put("companySize", jobData.getCompanySize());
+                jobDataRecord.put("companySize", jobData.getCompanySize());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getJobPostingDate())) {
-                record.put("jobPostingDate", jobData.getJobPostingDate());
+                jobDataRecord.put("jobPostingDate", jobData.getJobPostingDate());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getPreference())) {
-                record.put("preference", jobData.getPreference());
+                jobDataRecord.put("preference", jobData.getPreference());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getContactPerson())) {
-                record.put("contactPerson", jobData.getContactPerson());
+                jobDataRecord.put("contactPerson", jobData.getContactPerson());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getContact())) {
-                record.put("contact", jobData.getContact());
+                jobDataRecord.put("contact", jobData.getContact());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getJobTitle())) {
-                record.put("jobTitle", jobData.getJobTitle());
+                jobDataRecord.put("jobTitle", jobData.getJobTitle());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getRole())) {
-                record.put("role", jobData.getRole());
+                jobDataRecord.put("role", jobData.getRole());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getJobPortal())) {
-                record.put("jobPortal", jobData.getJobPortal());
+                jobDataRecord.put("jobPortal", jobData.getJobPortal());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getJobDescription())) {
-                record.put("jobDescription", jobData.getJobDescription());
+                jobDataRecord.put("jobDescription", jobData.getJobDescription());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getBenefits())) {
-                record.put("benefits", jobData.getBenefits());
+                jobDataRecord.put("benefits", jobData.getBenefits());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getSkills())) {
-                record.put("skills", jobData.getSkills());
+                jobDataRecord.put("skills", jobData.getSkills());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getResponsibilities())) {
-                record.put("responsibilities", jobData.getResponsibilities());
+                jobDataRecord.put("responsibilities", jobData.getResponsibilities());
             }
 
             if (!StringUtils.isNullOrEmpty(jobData.getCompanyName())) {
-                record.put("companyName", jobData.getCompanyName());
+                jobDataRecord.put("companyName", jobData.getCompanyName());
             }
 
             GenericData.Record companyProfileRecord = new GenericData.Record(SCHEMA.getField("companyProfile").schema());
@@ -261,36 +281,18 @@ public class HdfsParquetService {
                 companyProfileRecord.put("ceo", companyProfileDto.getCeo());
             }
 
-            record.put("companyProfile", companyProfileRecord);
+            jobDataRecord.put("companyProfile", companyProfileRecord);
 
-            records.add(record);
+            records.add(jobDataRecord);
         });
 
         return records;
     }
 
-    private void renameFile(Path src, Path dest) {
-        try {
-            FileSystem fs = hdfsAdapter.getFileSystem();
-            if (fs.exists(src)) {
-                fs.rename(src, dest);
-                log.info("File {} renamed to {}", src, dest);
-            }
-        } catch (IOException e) {
-            log.error("Failed to rename file {} to {}", src, dest, e);
-        }
-    }
-
-    private Path completeFile(Path path) {
-        Path completedPath = new Path(path.getParent() + "/" + path.getName().replace("pre.tmp", "tmp"));
-        renameFile(path, completedPath);
-        return completedPath;
-    }
-
-    private void writeToParquet(List<GenericData.Record> records) {
-        for (GenericData.Record record : records) {
+    private void writeToParquet(List<GenericData.Record> records) throws IOException {
+        for (GenericData.Record jobDataRecord : records) {
             try {
-                writer.write(record);
+                this.writer.write(jobDataRecord);
             } catch (IOException e) {
                 log.error("Failed to write record to parquet", e);
             }
@@ -301,43 +303,50 @@ public class HdfsParquetService {
         jobDataList.forEach(queue::put);
     }
 
-    private void initWriter() {
-        String folder = hdfsAdapter.getNameNode() + "/bigdata";
-        Optional<Path> optionalPath = Optional.empty();
-        try {
-            Path path = new Path(folder);
-            FileSystem fs = hdfsAdapter.getFileSystem();
-            if (!fs.exists(path)) {
-                fs.mkdirs(path);
-            }
-            optionalPath = Optional.of(new Path(path + "/pre.tmp." +
-                    new SimpleDateFormat(datetimePattern).format(new Date()) + ".parquet"));
-        } catch (IOException e) {
-            log.error("Failed to create parquet file", e);
-        }
-
-        if (optionalPath.isEmpty()) {
-            log.error("Failed to create parquet file");
+    private void initWriter() throws IOException {
+        Optional<Path> optionalPath = this.getPath();
+        if (optionalPath.isEmpty()){
             return;
         }
 
         this.path = optionalPath.get();
-
-        try {
-            OutputFile outputFile = HadoopOutputFile.fromPath(path, hdfsAdapter.getConfiguration());
-            this.writer = AvroParquetWriter.<GenericData.Record>builder(outputFile)
-                    .withSchema(SCHEMA)
-                    .withConf(hdfsAdapter.getConfiguration())
-                    .withCompressionCodec(CompressionCodecName.SNAPPY)
-                    .withWriteMode(ParquetFileWriter.Mode.CREATE)
-                    .build();
-        } catch (IOException e) {
-            log.error("Failed to create parquet writer", e);
-        }
+        OutputFile outputFile = HadoopOutputFile.fromPath(path, hdfsAdapter.getConfiguration());
+        this.writer = AvroParquetWriter
+                .<GenericData.Record>builder(outputFile)
+                .withSchema(SCHEMA)
+                .withConf(hdfsAdapter.getConfiguration())
+                .withCompressionCodec(CompressionCodecName.SNAPPY)
+                .withWriteMode(ParquetFileWriter.Mode.CREATE)
+                .build();
 
     }
 
-    private void writeToNextFile(){
+    private Optional<Path> getPath(){
+        String folderUrl = getFolder(formatter.format(new Date(System.currentTimeMillis())));
+        try {
+            Path folderPath = new Path(folderUrl);
+            FileSystem fs = hdfsAdapter.getFileSystem();
+            if (!fs.exists(folderPath)) {
+                fs.mkdirs(folderPath);
+            }
+            return Optional.of(getNewFile(folderPath));
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+        }
+        return Optional.empty();
+    }
+
+    private Path getNewFile(Path folderPath){
+        String fileName = folderPath.toString() + '/' + new Timestamp(System.currentTimeMillis()).getTime() + ".parquet";
+        return new Path(fileName);
+    }
+
+    private String getFolder(String day){
+        return hdfsAdapter.getNameNode() + "/" + hdfsConfiguration.getHdfsFolder() + "/" + day;
+    }
+
+    private void writeToNextFile() throws IOException {
+        log.info("Writing to next file");
         ParquetWriter<GenericData.Record> oldWriter = this.writer;
         Path oldPath = new Path(this.path.toString());
         initWriter();

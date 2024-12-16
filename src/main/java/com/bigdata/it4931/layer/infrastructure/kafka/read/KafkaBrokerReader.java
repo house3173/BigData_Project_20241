@@ -72,12 +72,13 @@ public abstract class KafkaBrokerReader extends KafkaBroker {
                 log.error("Error while consuming messages", e);
             }
         }
+        log.info("Consumer stopped at thread: {}", Thread.currentThread().getName());
     }
 
     public abstract void processing(List<KafkaMessage<byte[]>> messages);
 
     private boolean waitingTimeExpired() {
-        synchronized (this.getClass().getSimpleName()) {
+        synchronized (KafkaBrokerReader.class) {
             return System.currentTimeMillis() - previousTime >= maxWaitSeconds * 1000L;
         }
     }
