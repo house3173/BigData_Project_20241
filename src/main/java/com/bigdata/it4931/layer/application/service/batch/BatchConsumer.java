@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -40,7 +39,7 @@ public class BatchConsumer extends KafkaBrokerReader implements ConsumeRunner {
                 log.error("Error when parse job data {}", e.getMessage(), e);
             }
         }
-//        hdfsParquetService.save(jobDataList);
+        hdfsParquetService.save(jobDataList);
     }
 
     @Override
