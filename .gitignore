@@ -30,3 +30,8 @@ build/
 
 ### VS Code ###
 .vscode/
+hadoop-namenode
+hadoop-datanode-1
+hadoop-datanode-2
+postgres-data
+

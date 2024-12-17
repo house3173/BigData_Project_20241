@@ -1,92 +1,134 @@
-version: '3.7'
-
 services:
   zookeeper:
-    image: wurstmeister/zookeeper:3.4
-    container_name: zookeeper
-    ports:
-      - "2181:2181"
+    image: confluentinc/cp-zookeeper:7.3.2
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - mynetwork
 
-  kafka:
-    image: wurstmeister/kafka:2.13-2.7.0
-    container_name: kafka
+  kafka-server:
+    image: confluentinc/cp-kafka:7.3.2
     ports:
       - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-server:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
+    networks:
+      - mynetwork
 
-  namenode:
-    image: apache/hadoop:3.3.1
-    container_name: namenode
-    ports:
-      - "9870:9870" # HDFS Web UI
-      - "9000:9000" # HDFS RPC
+  hadoop-namenode:
+    image: apache/hadoop:3.3.5
+    container_name: hadoop-namenode
+    hostname: hadoop-namenode
+    user: root
     environment:
-      - HADOOP_NODE_TYPE=namenode
-      - CLUSTER_NAME=hadoop_cluster
-
-  datanode:
-    image: apache/hadoop:3.3.1
-    container_name: datanode
-    environment:
-      - HADOOP_NODE_TYPE=datanode
-      - CLUSTER_NAME=hadoop_cluster
-    depends_on:
-      - namenode
-
-  spark-master:
-    image: bde2020/spark-master:3.1.2-hadoop3.2
-    container_name: spark-master
-    ports:
-      - "7077:7077" # Spark master port
-      - "8080:8080" # Spark UI
-    environment:
-      - SPARK_MODE=master
-      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
-
-  spark-worker:
-    image: bde2020/spark-worker:3.1.2-hadoop3.2
-    container_name: spark-worker
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-    depends_on:
-      - spark-master
-
-  clickhouse-server:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse-server
-    ports:
-      - "8123:8123" # HTTP
-      - "9000:9000" # Native TCP
+      - HADOOP_HOME=/opt/hadoop
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
-      - clickhouse_logs:/var/log/clickhouse-server
+      - ./hadoop-namenode:/opt/hadoop/data/nameNode
+      - ./hadoop-config:/opt/hadoop/etc/hadoop
+      - ./start-hdfs.sh:/start-hdfs.sh
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    command: [ "/bin/bash", "/start-hdfs.sh" ]
+    networks:
+      - mynetwork
+
+  hadoop-datanode-1:
+    image: apache/hadoop:3.3.5
+    container_name: hadoop-datanode-1
+    hostname: hadoop-datanode-1
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop-datanode-1:/opt/hadoop/data/dataNode
+      - ./hadoop-config:/opt/hadoop/etc/hadoop
+      - ./init-datanode.sh:/init-datanode.sh
+    ports:
+      - "9864:9864"
+    depends_on:
+      - hadoop-namenode
+    command: [ "/bin/bash", "/init-datanode.sh" ]
+    networks:
+      - mynetwork
+
+  hadoop-datanode-2:
+    image: apache/hadoop:3.3.5
+    container_name: hadoop-datanode-2
+    hostname: hadoop-datanode-2
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop-datanode-2:/opt/hadoop/data/dataNode
+      - ./hadoop-config:/opt/hadoop/etc/hadoop
+      - ./init-datanode.sh:/init-datanode.sh
+    ports:
+      - "9865:9864"
+    depends_on:
+      - hadoop-namenode
+    command: [ "/bin/bash", "/init-datanode.sh" ]
+    networks:
+      - mynetwork
 
   superset:
     image: apache/superset:latest
     container_name: superset
+    restart: always
+    environment:
+      - SUPERSET_SECRET_KEY=supersecretkey123
+      - DATABASE_URL=postgresql+psycopg2://superset:supersetpassword@postgres:5432/superset
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./superset-home:/app/superset_home
+    depends_on:
+      - postgres
+      - redis
     ports:
       - "8088:8088"
-    environment:
-      - SUPERSET_LOAD_EXAMPLES=yes
-      - SUPERSET_SECRET_KEY=your_secret_key
-    depends_on:
-      - clickhouse-server
-    entrypoint: >
-      /bin/bash -c "
-      superset db upgrade &&
+    command: >
+      bash -c "
+      pip install clickhouse-connect psycopg2-binary pymongo && superset db upgrade &&
+      superset fab create-admin --username admin --firstname Admin --lastname Admin --email admin@example.com --password admin &&
+      superset load_examples &&
       superset init &&
-      superset run -p 8088 -h 0.0.0.0"
-    volumes:
-      - superset_home:/app/superset_home
+      superset run -h 0.0.0.0 -p 8088
+      "
+    networks:
+      - mynetwork
 
-volumes:
-  clickhouse_data:
-  clickhouse_logs:
-  superset_home:
+  postgres:
+    image: postgres:13
+    container_name: superset_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: supersetpassword
+      POSTGRES_DB: superset
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - mynetwork
+
+  redis:
+    image: redis:latest
+    container_name: superset-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
+    driver: bridge
