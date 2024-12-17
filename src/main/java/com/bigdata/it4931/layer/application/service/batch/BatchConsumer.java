@@ -40,7 +40,7 @@ public class BatchConsumer extends KafkaBrokerReader implements ConsumeRunner {
                 log.error("Error when parse job data {}", e.getMessage(), e);
             }
         }
-        hdfsParquetService.save(jobDataList);
+//        hdfsParquetService.save(jobDataList);
     }
 
     @Override

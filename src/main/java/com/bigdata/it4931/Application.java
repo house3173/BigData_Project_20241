@@ -1,8 +1,11 @@
 package com.bigdata.it4931;
 
 import com.bigdata.it4931.layer.application.service.serving.ConsumeRunner;
+import com.bigdata.it4931.layer.application.service.speed.SpeedConsumer;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.SparkConf;
+import org.apache.spark.sql.SparkSession;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -18,8 +21,12 @@ import java.util.List;
 public class Application implements CommandLineRunner {
     private final List<ConsumeRunner> kafkaConsumerThreads;
 
-    public Application(List<ConsumeRunner> kafkaConsumerThreads) {
+    private final SpeedConsumer speedConsumer;
+
+    public Application(List<ConsumeRunner> kafkaConsumerThreads,
+                       SpeedConsumer speedConsumer) {
         this.kafkaConsumerThreads = kafkaConsumerThreads;
+        this.speedConsumer = speedConsumer;
     }
 
     public static void main(String[] args) {
@@ -30,6 +37,7 @@ public class Application implements CommandLineRunner {
     public void run(String... args) {
         log.info("Starting consumers...");
         kafkaConsumerThreads.forEach(ConsumeRunner::start);
+        speedConsumer.processStream();
     }
 
     @PreDestroy

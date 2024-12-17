@@ -132,11 +132,11 @@ public class CsvProcessingService implements ICsvProcessingService {
         List<String[]> allRows = csvReader.readAll();
         csvReader.close();
         inputStream.close();
-        String[] header = allRows.removeFirst();
+        String[] header = allRows.remove(0);
         log.info("Sorting CSV file");
         log.info("Started sorting CSV file");
         allRows.sort(Comparator.comparing(row -> row[10]));
-        allRows.addFirst(header);
+        allRows.add(0, header);
         log.info("Finished sorting CSV file");
 
         FSDataOutputStream outputStream = hdfsAdapter.getFileSystem().create(new Path(outputPath));

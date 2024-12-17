@@ -1,27 +1,116 @@
 package com.bigdata.it4931.layer.application.service.speed;
 
-import com.bigdata.it4931.layer.infrastructure.kafka.message.KafkaMessage;
-import com.bigdata.it4931.layer.infrastructure.kafka.read.KafkaBrokerReader;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
+import org.apache.spark.SparkConf;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.streaming.DataStreamWriter;
+import org.apache.spark.sql.streaming.Trigger;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.List;
-import java.util.Properties;
+import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.from_json;
 
 @Service
 @Slf4j
-public class SpeedConsumer extends KafkaBrokerReader {
-    public SpeedConsumer(@Qualifier("kafkaBrokerSpeedReaderProperties") Properties props,
-                         @Value("${kafka.consumer.topic}") String topic) {
-        super(props, Collections.singletonList(topic), 1, 10, 5);
+public class SpeedConsumer {
+    private final SparkConf conf;
+    private final SparkSession spark;
+
+    public SpeedConsumer(){
+        this.conf = new SparkConf()
+                .setAppName("SpeedConsumer")
+                .setMaster("spark://spark-singlenode:7077")
+                .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+                .set("spark.kryo.registrationRequired", "false")
+                .set("spark.executor.memory", "1g")
+                .set("spark.executor.cores", "1")
+                .set("spark.driver.memory", "1g");
+        this.spark = SparkSession.builder()
+                .config(conf)
+                .getOrCreate();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(this::stop));
+
     }
 
-    @Override
-    public void processing(List<KafkaMessage<byte[]>> messages) {
+    protected void stop() {
+        log.info("Stopping Spark session...");
+        spark.stop();
+    }
 
+    public void processStream() {
+        log.info("Processing stream...");
+        Dataset<Row> df = spark.readStream()
+                .format("kafka")
+                .option("kafka.bootstrap.servers", "kafka-server:9092")
+                .option("subscribe", "bigdata")
+                .option("startingOffsets", "earliest")
+                .load();
+
+        df.printSchema();
+
+        Dataset<Row> processedDF = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "topic", "partition", "offset", "timestamp");
+
+        processedDF.printSchema();
+
+        StructType companyProfileSchema = new StructType()
+                .add("Sector", DataTypes.StringType)
+                .add("Industry", DataTypes.StringType)
+                .add("City", DataTypes.StringType)
+                .add("State", DataTypes.StringType)
+                .add("Zip", DataTypes.StringType)
+                .add("Website", DataTypes.StringType)
+                .add("Ticker", DataTypes.StringType)
+                .add("CEO", DataTypes.StringType);
+
+        StructType jsonSchema = new StructType()
+                .add("jobId", DataTypes.StringType)
+                .add("experience", DataTypes.StringType)
+                .add("qualifications", DataTypes.StringType)
+                .add("salaryRange", DataTypes.StringType)
+                .add("location", DataTypes.StringType)
+                .add("country", DataTypes.StringType)
+                .add("latitude", DataTypes.StringType)
+                .add("longitude", DataTypes.StringType)
+                .add("workType", DataTypes.StringType)
+                .add("companySize", DataTypes.StringType)
+                .add("jobPostingDate", DataTypes.StringType)
+                .add("preference", DataTypes.StringType)
+                .add("contactPerson", DataTypes.StringType)
+                .add("contact", DataTypes.StringType)
+                .add("jobTitle", DataTypes.StringType)
+                .add("role", DataTypes.StringType)
+                .add("jobPortal", DataTypes.StringType)
+                .add("jobDescription", DataTypes.StringType)
+                .add("benefits", DataTypes.StringType)
+                .add("skills", DataTypes.StringType)
+                .add("responsibilities", DataTypes.StringType)
+                .add("companyName", DataTypes.StringType)
+                .add("companyProfile", companyProfileSchema); // Schema lồng ghép
+
+        Dataset<Row> jsonDF = processedDF.selectExpr("CAST(value AS STRING) as value")
+                .select(from_json(col("value"), jsonSchema).as("data"))
+                .select("data.*");
+
+        jsonDF.printSchema();
+
+        try {
+            DataStreamWriter<Row> writer = jsonDF.writeStream()
+                    .format("memory")
+                    .queryName("job_data")
+                    .option("truncate", "false")
+                    .trigger(Trigger.ProcessingTime("5 seconds"))
+                    .outputMode("append");
+
+
+            writer.start().awaitTermination();
+        } catch (Exception e) {
+            log.error("Failed to write stream", e);
+        }
     }
 }
+
