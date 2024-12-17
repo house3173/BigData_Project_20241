@@ -1,269 +1,134 @@
-#services:
-#  zookeeper:
-#    image: confluentinc/cp-zookeeper:7.3.2
-#    environment:
-#      ZOOKEEPER_CLIENT_PORT: 2181
-#      ZOOKEEPER_TICK_TIME: 2000
-#    networks:
-#      - mynetwork
-#
-#  kafka-server:
-#    image: confluentinc/cp-kafka:7.3.2
-#    ports:
-#      - "9092:9092"
-#    environment:
-#      KAFKA_BROKER_ID: 1
-#      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-#      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-server:29092,PLAINTEXT_HOST://localhost:9092
-#      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-#      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-#      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-#    depends_on:
-#      - zookeeper
-#    networks:
-#      - mynetwork
-#
-#  hadoop-namenode:
-#    image: apache/hadoop:3.3.5
-#    container_name: hadoop-namenode
-#    hostname: hadoop-namenode
-#    user: root
-#    environment:
-#      - HADOOP_HOME=/opt/hadoop
-#    volumes:
-#      - ./hadoop-namenode:/opt/hadoop/data/nameNode
-#      - ./hadoop-config:/opt/hadoop/etc/hadoop
-#      - ./start-hdfs.sh:/start-hdfs.sh
-#    ports:
-#      - "9870:9870"
-#      - "9000:9000"
-#    command: [ "/bin/bash", "/start-hdfs.sh" ]
-#    networks:
-#      - mynetwork
-#
-#  hadoop-datanode-1:
-#    image: apache/hadoop:3.3.5
-#    container_name: hadoop-datanode-1
-#    hostname: hadoop-datanode-1
-#    user: root
-#    environment:
-#      - HADOOP_HOME=/opt/hadoop
-#    volumes:
-#      - ./hadoop-datanode-1:/opt/hadoop/data/dataNode
-#      - ./hadoop-config:/opt/hadoop/etc/hadoop
-#      - ./init-datanode.sh:/init-datanode.sh
-#    ports:
-#      - "9864:9864"
-#    depends_on:
-#      - hadoop-namenode
-#    command: [ "/bin/bash", "/init-datanode.sh" ]
-#    networks:
-#      - mynetwork
-#
-#  hadoop-datanode-2:
-#    image: apache/hadoop:3.3.5
-#    container_name: hadoop-datanode-2
-#    hostname: hadoop-datanode-2
-#    user: root
-#    environment:
-#      - HADOOP_HOME=/opt/hadoop
-#    volumes:
-#      - ./hadoop-datanode-2:/opt/hadoop/data/dataNode
-#      - ./hadoop-config:/opt/hadoop/etc/hadoop
-#      - ./init-datanode.sh:/init-datanode.sh
-#    ports:
-#      - "9865:9864"
-#    depends_on:
-#      - hadoop-namenode
-#    command: [ "/bin/bash", "/init-datanode.sh" ]
-#    networks:
-#      - mynetwork
-#
-#  superset:
-#    image: apache/superset:latest
-#    container_name: superset
-#    restart: always
-#    environment:
-#      - SUPERSET_SECRET_KEY=supersecretkey123
-#      - DATABASE_URL=postgresql+psycopg2://superset:supersetpassword@postgres:5432/superset
-#      - REDIS_URL=redis://redis:6379/0
-#    volumes:
-#      - ./superset-home:/app/superset_home
-#    depends_on:
-#      - postgres
-#      - redis
-#    ports:
-#      - "8088:8088"
-#    command: >
-#      bash -c "
-#      pip install clickhouse-connect psycopg2-binary pymongo && superset db upgrade &&
-#      superset fab create-admin --username admin --firstname Admin --lastname Admin --email admin@example.com --password admin &&
-#      superset load_examples &&
-#      superset init &&
-#      superset run -h 0.0.0.0 -p 8088
-#      "
-#    networks:
-#      - mynetwork
-#
-#  postgres:
-#    image: postgres:13
-#    container_name: superset_postgres
-#    restart: always
-#    environment:
-#      POSTGRES_USER: superset
-#      POSTGRES_PASSWORD: supersetpassword
-#      POSTGRES_DB: superset
-#    volumes:
-#      - ./postgres-data:/var/lib/postgresql/data
-#    ports:
-#      - "5432:5432"
-#    networks:
-#      - mynetwork
-#
-#  redis:
-#    image: redis:latest
-#    container_name: superset-redis
-#    restart: always
-#    ports:
-#      - "6379:6379"
-#    networks:
-#      - mynetwork
-#
-#networks:
-#  mynetwork:
-#    driver: bridge
-
-version: '3'
-
 services:
-  spark-master:
-    image: docker.io/bitnami/spark:3.5
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
     environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-      - SPARK_MASTER_HOSTNAME=spark-master
-      - SPARK_MASTER_PORT=7077
-    ports:
-      - "4040:4040"
-      - "6066:6066"
-      - "7077:7077"
-      - "8080:8080"
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     networks:
-      - spark-network
+      - mynetwork
 
-  spark-worker-1:
-    image: docker.io/bitnami/spark:3.5
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=4G
-      - SPARK_WORKER_CORES=4
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
+  kafka-server:
+    image: confluentinc/cp-kafka:7.3.2
     ports:
-      - "8081:8081"
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-server:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
-      - spark-master
+      - zookeeper
     networks:
-      - spark-network
+      - mynetwork
 
-  spark-worker-2:
-    image: docker.io/bitnami/spark:3.5
+  hadoop-namenode:
+    image: apache/hadoop:3.3.5
+    container_name: hadoop-namenode
+    hostname: hadoop-namenode
+    user: root
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=4G
-      - SPARK_WORKER_CORES=4
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-    ports:
-      - "8082:8082"
-    depends_on:
-      - spark-master
-    networks:
-      - spark-network
-
-  zookeeper-1:
-    image: bitnami/zookeeper:3.9
-    container_name: zookeeper-1
-    hostname: zookeeper-1
-    restart: always
-    ports:
-      - "22181:2181"
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-    networks:
-      - spark-network
-
-  zookeeper-2:
-    image: bitnami/zookeeper:3.9
-    container_name: zookeeper-2
-    hostname: zookeeper-2
-    restart: always
-    ports:
-      - "32181:2181"
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-    networks:
-      - spark-network
-
-  kafka-1:
-    image: bitnami/kafka:3.5
-    container_name: kafka-1
-    hostname: kafka-1
-    ports:
-      - "29092:29092"
-    environment:
-      - KAFKA_BROKER_ID= 1
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper-1:2181,zookeeper-2:2181
-      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
-      - KAFKA_ADVERTISED_LISTENERS=EXTERNAL://localhost:29092,INTERNAL://kafka-1:9092
-      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
-    depends_on:
-      - zookeeper-1
-      - zookeeper-2
-    networks:
-      - spark-network
-
-  kafka-2:
-    image: bitnami/kafka:3.5
-    container_name: kafka-2
-    hostname: kafka-2
-    ports:
-      - "39092:39092"
-    environment:
-      - KAFKA_BROKER_ID= 2
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper-1:2181,zookeeper-2:2181
-      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:39092
-      - KAFKA_ADVERTISED_LISTENERS=EXTERNAL://localhost:39092,INTERNAL://kafka-2:9092
-      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
-    depends_on:
-      - zookeeper-1
-      - zookeeper-2
-    networks:
-      - spark-network
-
-  mongo:
-    image: mongo
-    container_name: mymongodb
-    hostname: mymongodb
-    ports:
-      - "27017:27017"
+      - HADOOP_HOME=/opt/hadoop
     volumes:
-      - ./data:/data/db
-    command: mongod --bind_ip_all
+      - ./hadoop-namenode:/opt/hadoop/data/nameNode
+      - ./hadoop-config:/opt/hadoop/etc/hadoop
+      - ./start-hdfs.sh:/start-hdfs.sh
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    command: [ "/bin/bash", "/start-hdfs.sh" ]
     networks:
-      - spark-network
+      - mynetwork
+
+  hadoop-datanode-1:
+    image: apache/hadoop:3.3.5
+    container_name: hadoop-datanode-1
+    hostname: hadoop-datanode-1
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop-datanode-1:/opt/hadoop/data/dataNode
+      - ./hadoop-config:/opt/hadoop/etc/hadoop
+      - ./init-datanode.sh:/init-datanode.sh
+    ports:
+      - "9864:9864"
+    depends_on:
+      - hadoop-namenode
+    command: [ "/bin/bash", "/init-datanode.sh" ]
+    networks:
+      - mynetwork
+
+  hadoop-datanode-2:
+    image: apache/hadoop:3.3.5
+    container_name: hadoop-datanode-2
+    hostname: hadoop-datanode-2
+    user: root
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    volumes:
+      - ./hadoop-datanode-2:/opt/hadoop/data/dataNode
+      - ./hadoop-config:/opt/hadoop/etc/hadoop
+      - ./init-datanode.sh:/init-datanode.sh
+    ports:
+      - "9865:9864"
+    depends_on:
+      - hadoop-namenode
+    command: [ "/bin/bash", "/init-datanode.sh" ]
+    networks:
+      - mynetwork
+
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    restart: always
+    environment:
+      - SUPERSET_SECRET_KEY=supersecretkey123
+      - DATABASE_URL=postgresql+psycopg2://superset:supersetpassword@postgres:5432/superset
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./superset-home:/app/superset_home
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8088:8088"
+    command: >
+      bash -c "
+      pip install clickhouse-connect psycopg2-binary pymongo && superset db upgrade &&
+      superset fab create-admin --username admin --firstname Admin --lastname Admin --email admin@example.com --password admin &&
+      superset load_examples &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
+    networks:
+      - mynetwork
+
+  postgres:
+    image: postgres:13
+    container_name: superset_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: supersetpassword
+      POSTGRES_DB: superset
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - mynetwork
+
+  redis:
+    image: redis:latest
+    container_name: superset-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - mynetwork
 
 networks:
-  spark-network:
+  mynetwork:
     driver: bridge
