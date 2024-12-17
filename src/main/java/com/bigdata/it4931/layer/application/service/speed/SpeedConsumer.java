@@ -99,17 +99,13 @@ public class SpeedConsumer {
         jsonDF.printSchema();
 
         try {
-            DataStreamWriter<Row> writer = jsonDF.writeStream()
-                    .format("memory")
-                    .queryName("job_data")
-                    .option("truncate", "false")
-                    .trigger(Trigger.ProcessingTime("5 seconds"))
-                    .outputMode("append");
-
-
-            writer.start().awaitTermination();
+            jsonDF.writeStream()
+                    .format("console")
+                    .outputMode("append")
+                    .trigger(Trigger.ProcessingTime("10 seconds"))
+                    .start();
         } catch (Exception e) {
-            log.error("Failed to write stream", e);
+            log.error("Error while processing stream", e);
         }
     }
 }

@@ -3,7 +3,6 @@ package com.bigdata.it4931.config.kafka.properties;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 @Data
@@ -23,6 +22,6 @@ public class KafkaProducerProperties {
     private String username;
     private String password;
     private String keySerializer = StringSerializer.class.getName();
-    private String valueSerializer = ByteArraySerializer.class.getName();
+    private String valueSerializer = StringSerializer.class.getName();
 }
 

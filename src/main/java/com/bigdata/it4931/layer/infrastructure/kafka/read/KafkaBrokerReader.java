@@ -49,15 +49,15 @@ public abstract class KafkaBrokerReader extends KafkaBroker {
         }
 
         while (running.get()) {
-            try (Consumer<String, byte[]> consumer = KafkaUtils.initConsumer(properties, topics)) {
-                List<KafkaMessage<byte[]>> messages = new ArrayList<>();
+            try (Consumer<String, String> consumer = KafkaUtils.initConsumer(properties, topics)) {
+                List<KafkaMessage<String>> messages = new ArrayList<>();
                 while (running.get()) {
-                    ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(100));
+                    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
                     if (records.isEmpty()) {
                         continue;
                     }
 
-                    for (ConsumerRecord<String, byte[]> record : records) {
+                    for (ConsumerRecord<String, String> record : records) {
                         messages.add(new KafkaMessage<>(record.value(), record.topic(), record.timestamp()));
                     }
 
@@ -75,7 +75,7 @@ public abstract class KafkaBrokerReader extends KafkaBroker {
         log.info("Consumer stopped at thread: {}", Thread.currentThread().getName());
     }
 
-    public abstract void processing(List<KafkaMessage<byte[]>> messages);
+    public abstract void processing(List<KafkaMessage<String>> messages);
 
     private boolean waitingTimeExpired() {
         synchronized (KafkaBrokerReader.class) {

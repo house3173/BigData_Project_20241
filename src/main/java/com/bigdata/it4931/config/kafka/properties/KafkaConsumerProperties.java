@@ -3,7 +3,6 @@ package com.bigdata.it4931.config.kafka.properties;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 @Data
@@ -20,6 +19,6 @@ public class KafkaConsumerProperties {
     private String password;
     private String groupId;
     private String keyDeserializer = StringDeserializer.class.getName();
-    private String valueDeserializer = ByteArrayDeserializer.class.getName();
+    private String valueDeserializer = StringDeserializer.class.getName();
 }
 

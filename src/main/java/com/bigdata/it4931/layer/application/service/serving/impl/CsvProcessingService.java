@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -97,7 +96,7 @@ public class CsvProcessingService implements ICsvProcessingService {
                     throw new RuntimeException(e);
                 }
 
-                kafkaBrokerWriter.write(Constants.OBJECT_MAPPER.writeValueAsString(jobDataDto), StandardCharsets.UTF_8);
+                kafkaBrokerWriter.write(Constants.OBJECT_MAPPER.writeValueAsString(jobDataDto));
             }
 
             inputStream.close();
@@ -145,5 +144,4 @@ public class CsvProcessingService implements ICsvProcessingService {
         csvWriter.close();
         outputStream.close();
     }
-
 }

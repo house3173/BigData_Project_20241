@@ -30,11 +30,11 @@ public class BatchConsumer extends KafkaBrokerReader implements ConsumeRunner {
     }
 
     @Override
-    public void processing(List<KafkaMessage<byte[]>> messages) {
+    public void processing(List<KafkaMessage<String>> messages) {
         List<JobDataDto> jobDataList = new ArrayList<>();
-        for (KafkaMessage<byte[]> message : messages) {
+        for (KafkaMessage<String> message : messages) {
             try {
-                JobDataDto jobData = Constants.OBJECT_MAPPER.readValue(new String(message.value(), StandardCharsets.UTF_8), JobDataDto.class);
+                JobDataDto jobData = Constants.OBJECT_MAPPER.readValue(message.value(), JobDataDto.class);
                 jobDataList.add(jobData);
             } catch (JsonProcessingException e) {
                 log.error("Error when parse job data {}", e.getMessage(), e);
